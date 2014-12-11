@@ -236,6 +236,7 @@ typedef struct {
     rvec    *x;
     real    *coefficient;
     rvec    *f;
+    rvec    *vir;
     gmx_bool bSpread;       /* These coordinates are used for spreading */
     int      pme_order;
     ivec    *idx;
@@ -282,6 +283,8 @@ typedef struct {
 typedef struct {
     /* work data for solve_pme */
     int      nalloc;
+    int      natom;
+    rvec *   x;
     real *   mhx;
     real *   mhy;
     real *   mhz;
@@ -292,7 +295,7 @@ typedef struct {
     real *   tmp2;
     real *   eterm;
     real *   m2inv;
-
+    real *   local_virial;
     real     energy_q;
     matrix   vir_q;
     real     energy_lj;
@@ -1754,13 +1757,15 @@ static void pmegrids_destroy(pmegrids_t *grids)
 }
 
 
-static void realloc_work(pme_work_t *work, int nkx)
+static void realloc_work(pme_work_t *work, int nkx, pme_atomcomm_t *atc )
 {
     int simd_width;
 
     if (nkx > work->nalloc)
     {
         work->nalloc = nkx;
+        work->natom  = atc->n;
+	work->x      = atc->x;
         srenew(work->mhx, work->nalloc);
         srenew(work->mhy, work->nalloc);
         srenew(work->mhz, work->nalloc);
@@ -1783,6 +1788,7 @@ static void realloc_work(pme_work_t *work, int nkx)
         snew_aligned(work->tmp2,  work->nalloc+simd_width, simd_width*sizeof(real));
         snew_aligned(work->eterm, work->nalloc+simd_width, simd_width*sizeof(real));
         srenew(work->m2inv, work->nalloc);
+        srenew(work->local_virial, 3 * work->natom);
     }
 }
 
@@ -1798,6 +1804,7 @@ static void free_work(pme_work_t *work)
     sfree_aligned(work->tmp2);
     sfree_aligned(work->eterm);
     sfree(work->m2inv);
+    sfree(work->local_virial);
 }
 
 
@@ -1902,6 +1909,7 @@ static int solve_pme_yzx(gmx_pme_t pme, t_complex *grid,
     t_complex *p0;
     int     kx, ky, kz, maxkx, maxky, maxkz;
     int     nx, ny, nz, iyz0, iyz1, iyz, iy, iz, kxstart, kxend;
+    int     natom;
     real    mx, my, mz;
     real    factor = M_PI*M_PI/(ewaldcoeff*ewaldcoeff);
     real    ets2, struct2, vfactor, ets2vf;
@@ -1911,8 +1919,10 @@ static int solve_pme_yzx(gmx_pme_t pme, t_complex *grid,
     real    rxx, ryx, ryy, rzx, rzy, rzz;
     pme_work_t *work;
     real    *mhx, *mhy, *mhz, *m2, *denom, *tmp1, *eterm, *m2inv;
+    real    *local_virial;
     real    mhxk, mhyk, mhzk, m2k;
     real    corner_fac;
+    rvec    * x, *vir  ;
     ivec    complex_order;
     ivec    local_ndata, local_offset, local_size;
     real    elfac;
@@ -1942,6 +1952,9 @@ static int solve_pme_yzx(gmx_pme_t pme, t_complex *grid,
     maxkz = nz/2+1;
 
     work  = &pme->work[thread];
+    x     = pme->atc[0].x;
+    vir   = pme->atc[0].vir;
+    natom = pme->atc[0].n;
     mhx   = work->mhx;
     mhy   = work->mhy;
     mhz   = work->mhz;
@@ -1950,10 +1963,12 @@ static int solve_pme_yzx(gmx_pme_t pme, t_complex *grid,
     tmp1  = work->tmp1;
     eterm = work->eterm;
     m2inv = work->m2inv;
+    local_virial = work->local_virial;
 
     iyz0 = local_ndata[YY]*local_ndata[ZZ]* thread   /nthread;
     iyz1 = local_ndata[YY]*local_ndata[ZZ]*(thread+1)/nthread;
 
+    for(int i=0;i< 3*natom ; i++ ) local_virial[i]=0.0;
     for (iyz = iyz0; iyz < iyz1; iyz++)
     {
         iy = iyz/local_ndata[ZZ];
@@ -2050,15 +2065,24 @@ static int solve_pme_yzx(gmx_pme_t pme, t_complex *grid,
 
             for (kx = kxstart; kx < kxend; kx++, p0++)
             {
+		real re=0.0;
                 d1      = p0->re;
                 d2      = p0->im;
-
-                p0->re  = d1*eterm[kx];
-                p0->im  = d2*eterm[kx];
 
                 struct2 = 2.0*(d1*d1+d2*d2);
 
                 tmp1[kx] = eterm[kx]*struct2;
+		for(int i=0;i< natom ; i++ ) { 
+			real kr = mhx[kx] * x[i][0] + mhy[kx] * x[i][1]+  mhz[kx] * x[i][2] ; 
+			ets2 = corner_fac * eterm[kx] * (  cos(kr)* d1  + sin(kr) * d2 );
+			ets2vf = ets2 * (factor*m2[kx] + 1.0)*2.0*m2inv[kx];
+			local_virial[3*i]   += 0.25*ets2vf*mhx[kx]*mhx[kx] - ets2;
+			local_virial[3*i+1] += 0.25*ets2vf*mhy[kx]*mhy[kx] - ets2;
+			local_virial[3*i+2] += 0.25*ets2vf*mhz[kx]*mhz[kx] - ets2;
+		}
+
+                p0->re  = d1*eterm[kx];
+                p0->im  = d2*eterm[kx];
             }
 
             for (kx = kxstart; kx < kxend; kx++)
@@ -2120,6 +2144,14 @@ static int solve_pme_yzx(gmx_pme_t pme, t_complex *grid,
             }
         }
     }
+    printf("local_virial = ");
+    for(int i=0;i< natom ; i++ ){
+	 printf("%f %f %f, ",local_virial[3*i],local_virial[3*i+1],local_virial[3*i+2]);
+	 vir[i][0] = local_virial[3*i];
+	 vir[i][1] = local_virial[3*i+1];
+	 vir[i][2] = local_virial[3*i+2];
+    }
+    printf("\n");
 
     if (bEnerVir)
     {
@@ -3712,7 +3744,7 @@ int gmx_pme_init(gmx_pme_t *         pmedata,
         snew(pme->work, pme->nthread);
         for (thread = 0; thread < pme->nthread; thread++)
         {
-            realloc_work(&pme->work[thread], pme->nkx);
+            realloc_work(&pme->work[thread], pme->nkx, pme->atc);
         }
     }
 
@@ -4545,7 +4577,7 @@ int gmx_pmeonly(gmx_pme_t pme,
     int  ret;
     int  natoms;
     matrix box;
-    rvec *x_pp      = NULL, *f_pp = NULL;
+    rvec *x_pp      = NULL, *f_pp = NULL,  * vir_pp = NULL;
     real *chargeA   = NULL, *chargeB = NULL;
     real *c6A       = NULL, *c6B = NULL;
     real *sigmaA    = NULL, *sigmaB = NULL;
@@ -4582,7 +4614,7 @@ int gmx_pmeonly(gmx_pme_t pme,
                                              &chargeA, &chargeB,
                                              &c6A, &c6B,
                                              &sigmaA, &sigmaB,
-                                             box, &x_pp, &f_pp,
+                                             box, &x_pp, &f_pp, &vir_pp,
                                              &maxshift_x, &maxshift_y,
                                              &pme->bFEP_q, &pme->bFEP_lj,
                                              &lambda_q, &lambda_lj,
@@ -4626,7 +4658,7 @@ int gmx_pmeonly(gmx_pme_t pme,
         clear_mat(vir_q);
         clear_mat(vir_lj);
 
-        gmx_pme_do(pme, 0, natoms, x_pp, f_pp,
+        gmx_pme_do(pme, 0, natoms, x_pp, f_pp, vir_pp,
                    chargeA, chargeB, c6A, c6B, sigmaA, sigmaB, box,
                    cr, maxshift_x, maxshift_y, mynrnb, wcycle,
                    vir_q, ewaldcoeff_q, vir_lj, ewaldcoeff_lj,
@@ -4636,7 +4668,7 @@ int gmx_pmeonly(gmx_pme_t pme,
         cycles = wallcycle_stop(wcycle, ewcPMEMESH);
 
         gmx_pme_send_force_vir_ener(pme_pp,
-                                    f_pp, vir_q, energy_q, vir_lj, energy_lj,
+                                    f_pp, vir_pp,  vir_q, energy_q, vir_lj, energy_lj,
                                     dvdlambda_q, dvdlambda_lj, cycles);
 
         count++;
@@ -4720,7 +4752,7 @@ do_redist_pos_coeffs(gmx_pme_t pme, t_commrec *cr, int start, int homenr,
 
 int gmx_pme_do(gmx_pme_t pme,
                int start,       int homenr,
-               rvec x[],        rvec f[],
+               rvec x[],        rvec f[],     rvec vir[],
                real *chargeA,   real *chargeB,
                real *c6A,       real *c6B,
                real *sigmaA,    real *sigmaB,
@@ -4786,6 +4818,7 @@ int gmx_pme_do(gmx_pme_t pme,
         }
         atc->x = x;
         atc->f = f;
+        atc->vir = vir;
     }
 
     m_inv_ur0(box, pme->recipbox);

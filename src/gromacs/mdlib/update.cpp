@@ -1507,7 +1507,8 @@ static void combine_forces(gmx_update_t upd,
         }
         constrain(NULL, FALSE, FALSE, constr, idef, ir, NULL, cr, step, 0, 1.0, md,
                   state->x, xp, xp, bMolPBC, state->box, state->lambda[efptBONDED], NULL,
-                  NULL, vir_lr_constr, nrnb, econqCoord, ir->epc == epcMTTK, state->veta, state->veta);
+                  NULL, vir_lr_constr, nrnb, econqCoord, ir->epc == epcMTTK, state->veta, state->veta,NULL);
+printf("HERE: %d\n",__LINE__);
     }
 
     /* Add nstcalclr-1 times the LR force to the sum of both forces
@@ -1532,6 +1533,7 @@ void update_constraints(FILE             *fplog,
                         gmx_bool          bMolPBC,
                         t_graph          *graph,
                         rvec              force[],   /* forces on home particles */
+                        rvec              vir[],   /* virial on home particles */
                         t_idef           *idef,
                         tensor            vir_part,
                         t_commrec        *cr,
@@ -1599,17 +1601,21 @@ void update_constraints(FILE             *fplog,
                       bMolPBC, state->box,
                       state->lambda[efptBONDED], dvdlambda,
                       NULL, bCalcVir ? &vir_con : NULL, nrnb, econqVeloc,
-                      inputrec->epc == epcMTTK, state->veta, vetanew);
+                      inputrec->epc == epcMTTK, state->veta, vetanew, vir);
+printf("HERE: %d\n",__LINE__);
         }
         else
         {
+printf("BEFORE: %f\n",vir[0][0]);
             constrain(NULL, bLog, bEner, constr, idef,
                       inputrec, ekind, cr, step, 1, 1.0, md,
                       state->x, xprime, NULL,
                       bMolPBC, state->box,
                       state->lambda[efptBONDED], dvdlambda,
                       state->v, bCalcVir ? &vir_con : NULL, nrnb, econqCoord,
-                      inputrec->epc == epcMTTK, state->veta, state->veta);
+                      inputrec->epc == epcMTTK, state->veta, state->veta, vir);
+printf("AFTER: %f\n",vir[0][0]);
+printf("HERE: %d\n",__LINE__);
         }
         wallcycle_stop(wcycle, ewcCONSTR);
 
@@ -1682,13 +1688,13 @@ void update_constraints(FILE             *fplog,
         {
             /* Constrain the coordinates xprime for half a time step */
             wallcycle_start(wcycle, ewcCONSTR);
-
             constrain(NULL, bLog, bEner, constr, idef,
                       inputrec, NULL, cr, step, 1, 0.5, md,
                       state->x, xprime, NULL,
                       bMolPBC, state->box,
                       state->lambda[efptBONDED], dvdlambda,
-                      state->v, NULL, nrnb, econqCoord, FALSE, 0, 0);
+                      state->v, NULL, nrnb, econqCoord, FALSE, 0, 0, vir);
+printf("HERE: %d\n",__LINE__);
 
             wallcycle_stop(wcycle, ewcCONSTR);
         }
@@ -1732,7 +1738,8 @@ void update_constraints(FILE             *fplog,
                       state->x, xprime, NULL,
                       bMolPBC, state->box,
                       state->lambda[efptBONDED], dvdlambda,
-                      NULL, NULL, nrnb, econqCoord, FALSE, 0, 0);
+                      NULL, NULL, nrnb, econqCoord, FALSE, 0, 0,vir);
+printf("HERE: %d\n",__LINE__);
             wallcycle_stop(wcycle, ewcCONSTR);
         }
     }
