@@ -1968,7 +1968,6 @@ static int solve_pme_yzx(gmx_pme_t pme, t_complex *grid,
     iyz0 = local_ndata[YY]*local_ndata[ZZ]* thread   /nthread;
     iyz1 = local_ndata[YY]*local_ndata[ZZ]*(thread+1)/nthread;
 
-    for(int i=0;i< 3*natom ; i++ ) local_virial[i]=0.0;
     for (iyz = iyz0; iyz < iyz1; iyz++)
     {
         iy = iyz/local_ndata[ZZ];
@@ -2072,14 +2071,6 @@ static int solve_pme_yzx(gmx_pme_t pme, t_complex *grid,
                 struct2 = 2.0*(d1*d1+d2*d2);
 
                 tmp1[kx] = eterm[kx]*struct2;
-		for(int i=0;i< natom ; i++ ) { 
-			real kr = mhx[kx] * x[i][0] + mhy[kx] * x[i][1]+  mhz[kx] * x[i][2] ; 
-			ets2 = corner_fac * eterm[kx] * (  cos(kr)* d1  + sin(kr) * d2 );
-			ets2vf = ets2 * (factor*m2[kx] + 1.0)*2.0*m2inv[kx];
-			local_virial[3*i]   += 0.25*ets2vf*mhx[kx]*mhx[kx] - ets2;
-			local_virial[3*i+1] += 0.25*ets2vf*mhy[kx]*mhy[kx] - ets2;
-			local_virial[3*i+2] += 0.25*ets2vf*mhz[kx]*mhz[kx] - ets2;
-		}
 
                 p0->re  = d1*eterm[kx];
                 p0->im  = d2*eterm[kx];
@@ -2144,14 +2135,6 @@ static int solve_pme_yzx(gmx_pme_t pme, t_complex *grid,
             }
         }
     }
-    printf("local_virial = ");
-    for(int i=0;i< natom ; i++ ){
-	 printf("%f %f %f, ",local_virial[3*i],local_virial[3*i+1],local_virial[3*i+2]);
-	 vir[i][0] = local_virial[3*i];
-	 vir[i][1] = local_virial[3*i+1];
-	 vir[i][2] = local_virial[3*i+2];
-    }
-    printf("\n");
 
     if (bEnerVir)
     {

@@ -682,7 +682,6 @@ static gmx_bool gmx_next_frame(t_trxstatus *status, t_trxframe *fr)
             {
                 snew(fr->vir, sh.natoms);
             }
-
         }
         if (fread_htrn(status->fio, &sh, fr->box, fr->x, fr->v, fr->f, fr->vir))
         {

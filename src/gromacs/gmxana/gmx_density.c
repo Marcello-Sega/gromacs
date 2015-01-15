@@ -330,10 +330,12 @@ void calc_density(const char *fn, atom_id **index, int gnx[],
                   double ***slDensity, int *nslices, t_topology *top, int ePBC,
                   int axis, int nr_grps, real *slWidth, gmx_bool bCenter,
                   atom_id *index_center, int ncenter,
-                  gmx_bool bRelative, const output_env_t oenv)
+                  gmx_bool bRelative, const output_env_t oenv, char** dens_opt)
 {
     rvec        *x0;            /* coordinates without pbc */
     matrix       box;           /* box (3x3) */
+    int          flags;
+    t_trxframe   fr;
     double       invvol;
     int          natoms;        /* nr. atoms in trj */
     t_trxstatus *status;
@@ -353,10 +355,22 @@ void calc_density(const char *fn, atom_id **index, int gnx[],
         gmx_fatal(FARGS, "Invalid axes. Terminating\n");
     }
 
-    if ((natoms = read_first_x(oenv, &status, fn, &t, &x0, box)) == 0)
+ /*   if ((natoms = read_first_x(oenv, &status, fn, &t, &x0, box)) == 0) */
+    flags = TRX_NEED_X;
+
+    if(dens_opt[0][0] == 'v')
+       flags|=TRX_NEED_F;
+
+    read_first_frame(oenv, &status, fn, &fr, flags);
+    exit(printf("HERE\n"));
+    if (fr.natoms == 0)
     {
         gmx_fatal(FARGS, "Could not read coordinates from statusfile\n");
     }
+    for (i=0 ; i< 3 ; i++)
+       for (j=0 ; j< 3 ; j++)
+            box[i][j] = fr.box[i][j];
+
 
     aveBox = 0;
 
@@ -376,6 +390,11 @@ void calc_density(const char *fn, atom_id **index, int gnx[],
     /*********** Start processing trajectory ***********/
     do
     {
+        t = fr.time;
+        x0 = fr.x;
+        for (i=0 ; i< 3 ; i++)
+           for (j=0 ; j< 3 ; j++)
+                box[i][j] = fr.box[i][j];
         gmx_rmpbc(gpbc, natoms, box, x0);
 
         /* Translate atoms so the com of the center-group is in the
@@ -448,7 +467,7 @@ void calc_density(const char *fn, atom_id **index, int gnx[],
         }
         nr_frames++;
     }
-    while (read_next_x(oenv, status, &t, x0, box));
+    while (read_next_frame(oenv, status, &fr));
     gmx_rmpbc_done(gpbc);
 
     /*********** done with status file **********/
@@ -622,7 +641,7 @@ int gmx_density(int argc, char *argv[])
 
     output_env_t       oenv;
     static const char *dens_opt[] =
-    { NULL, "mass", "number", "charge", "electron", NULL };
+    { NULL, "mass", "number", "charge", "electron", "virial", NULL };
     static int         axis        = 2;  /* normal to memb. default z  */
     static const char *axtitle     = "Z";
     static int         nslices     = 50; /* nr of slices defined       */
@@ -743,7 +762,7 @@ int gmx_density(int argc, char *argv[])
     {
         calc_density(ftp2fn(efTRX, NFILE, fnm), index, ngx, &density, &nslices, top,
                      ePBC, axis, ngrps, &slWidth, bCenter, index_center, ncenter,
-                     bRelative, oenv);
+                     bRelative, oenv, dens_opt);
     }
 
     plot_density(density, opt2fn("-o", NFILE, fnm),
