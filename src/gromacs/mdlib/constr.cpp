@@ -681,10 +681,8 @@ gmx_bool constrain(FILE *fplog, gmx_bool bLog, gmx_bool bEner,
         }
         if(local_vir!=NULL) { 
           for(i=0;i<homenr;i++){
-	      printf("before localv[%d]: %f %f %f\n",i,local_vir[i][0],local_vir[i][1],local_vir[i][2]);
               for (j = 0; j < DIM; j++)
 	  	local_vir[i][j]+=vir_fac * tmpvir[i][j];
-	      printf("after  localv[%d]: %f %f %f\n",i,local_vir[i][0],local_vir[i][1],local_vir[i][2]);
 	  }
         }
     }

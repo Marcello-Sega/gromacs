@@ -1094,14 +1094,12 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
              * Check comments in sim_util.c
              */
 // SAW
-printf("md.cpp BEFORE DO_FORCE: %f\n",vir[0][0]);
             do_force(fplog, cr, ir, step, nrnb, wcycle, top, groups,
                      state->box, state->x, &state->hist,
                      f, vir, force_vir, mdatoms, enerd, fcd,
                      state->lambda, graph,
                      fr, vsite, mu_tot, t, mdoutf_get_fp_field(outf), ed, bBornRadii,
                      (bNS ? GMX_FORCE_NS : 0) | force_flags);
-printf("md.cpp AFTER DO_FORCE: %f\n",vir[0][0]);
         }
 
         if (bVV && !bStartingFromCpt && !bRerunMD)
@@ -1182,13 +1180,11 @@ printf("md.cpp AFTER DO_FORCE: %f\n",vir[0][0]);
                 if (!bRerunMD || rerun_fr.bV || bForceUpdate)     /* Why is rerun_fr.bV here?  Unclear. */
                 {
                     wallcycle_stop(wcycle, ewcUPDATE);
-printf("HERE: %s %d\n",__FILE__,__LINE__);
                     update_constraints(fplog, step, NULL, ir, ekind, mdatoms,
                                        state, fr->bMolPBC, graph, f, vir,
                                        &top->idef, shake_vir,
                                        cr, nrnb, wcycle, upd, constr,
                                        TRUE, bCalcVir, vetanew);
-printf("HERE: %s %d\n",__FILE__,__LINE__);
                     wallcycle_start(wcycle, ewcUPDATE);
 
                     if (bCalcVir && bUpdateDoLR && ir->nstcalclr > 1)
@@ -1472,13 +1468,11 @@ printf("HERE: %s %d\n",__FILE__,__LINE__);
                 /* if we have constraints, we have to remove the kinetic energy parallel to the bonds */
                 if (constr && bIfRandomize)
                 {
-printf("HERE: %s %d\n",__FILE__,__LINE__);
                     update_constraints(fplog, step, NULL, ir, ekind, mdatoms,
                                        state, fr->bMolPBC, graph, f, vir,
                                        &top->idef, tmp_vir,
                                        cr, nrnb, wcycle, upd, constr,
                                        TRUE, bCalcVir, vetanew);
-printf("HERE: %s %d\n",__FILE__,__LINE__);
                 }
             }
         }
@@ -1573,14 +1567,11 @@ printf("HERE: %s %d\n",__FILE__,__LINE__);
                               ekind, M, upd, bInitStep, etrtPOSITION, cr, nrnb, constr, &top->idef);
                 wallcycle_stop(wcycle, ewcUPDATE);
 
-printf("HERE: %s %d\n",__FILE__,__LINE__);
-printf("md.cpp BEFORE UPDATING CONSTRAINTS: %f\n",vir[0][0]);
                 update_constraints(fplog, step, &dvdl_constr, ir, ekind, mdatoms, state,
                                    fr->bMolPBC, graph, f, vir,
                                    &top->idef, shake_vir,
                                    cr, nrnb, wcycle, upd, constr,
                                    FALSE, bCalcVir, state->veta);
-printf("md.cpp AFTER UPDATING CONSTRAINTS: %f\n",vir[0][0]);
 
                 if (bCalcVir && bUpdateDoLR && ir->nstcalclr > 1)
                 {
@@ -1615,7 +1606,6 @@ printf("md.cpp AFTER UPDATING CONSTRAINTS: %f\n",vir[0][0]);
                      * to numerical errors, or are they important
                      * physically? I'm thinking they are just errors, but not completely sure.
                      * For now, will call without actually constraining, constr=NULL*/
-printf("HERE: %s %d\n",__FILE__,__LINE__);
                     update_constraints(fplog, step, NULL, ir, ekind, mdatoms,
                                        state, fr->bMolPBC, graph, f, vir,
                                        &top->idef, tmp_vir,
